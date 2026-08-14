@@ -24,6 +24,13 @@ Sistema Multitenant de Gestão Escolar com backend em Python (FastAPI) e fronten
 ## Funcionalidades Principais
 
 - Autenticação e Controle de Acesso (RBAC: Admin, Diretor, Secretário, Professor).
-- Gestão de Alunos e Responsáveis (Relacionamento N:N).
+- Gestão de Alunos e Responsáveis (Relacionamento N:N com Autocomplete de busca).
+- Gestão de Professores (CRUD completo com Toggle de Ativação/Inativação).
+- Gestão de Turmas (Interface em Abas: Info, Alunos, Grade Curricular).
 - Catálogo de Matérias e Grade Curricular.
-- Trilha de Auditoria (Logs).
+- Agenda Escolar (Calendário interativo, Eventos Globais e por Turma).
+- Central de Notificações (Sino com Badge e avisos automáticos gerados pela Agenda).
+- Trilha de Auditoria (Logs interceptados diretamente nas requisições do backend).
+- Sistema de Lembretes e Mensageria (WebSocket).
+- Frontend com design moderno (Material 3 e Layout Responsivo Desktop/Mobile).
+- Testes E2E (End-to-End) garantindo a confiabilidade dos endpoints.

@@ -40,3 +40,15 @@ venv.bak/
 # OS
 .DS_Store
 Thumbs.db
+
+# Flutter/Dart
+app_escola/.dart_tool/
+app_escola/.flutter-plugins
+app_escola/.flutter-plugins-dependencies
+app_escola/.packages
+app_escola/build/
+app_escola/windows/flutter/ephemeral/
+app_escola/linux/flutter/ephemeral/
+app_escola/macos/flutter/ephemeral/
+app_escola/build/
+*.log

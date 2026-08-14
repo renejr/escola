@@ -20,12 +20,18 @@ from router_alunos import router as alunos_router
 from router_materias import router as materias_router
 from router_grade import router as grade_router
 from router_professores import router as professores_router
+from router_turmas import router as turmas_router
+from router_agenda import router as agenda_router
+from router_notificacoes import router as notificacoes_router
 
 app.include_router(responsaveis_router)
 app.include_router(alunos_router)
 app.include_router(materias_router)
 app.include_router(grade_router)
 app.include_router(professores_router)
+app.include_router(turmas_router)
+app.include_router(agenda_router)
+app.include_router(notificacoes_router)
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 LLM_TIMEOUT = int(os.getenv("LLM_TIMEOUT", "30"))
@@ -36,11 +42,6 @@ ALGORITHM = "HS256"
 
 # Controle de concorrência para GPUs com VRAM limitada (4GB)
 llm_semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
-
-class TurmaCreate(BaseModel):
-    nome: str
-
-
 
 class NotaCreate(BaseModel):
     aluno_id: str
@@ -68,51 +69,6 @@ class PerguntaIA(BaseModel):
 from deps import get_db, get_tenant_context, require_role, registrar_auditoria
 
 # Controle de concorrência para GPUs com VRAM limitada (4GB)
-
-@app.post("/core/turmas")
-async def criar_turma(
-    turma: TurmaCreate, 
-    request: Request,
-    tenant: dict = Depends(require_role(['admin', 'diretor', 'secretario'])),
-    conn: asyncpg.Connection = Depends(get_db)
-):
-    escola_id = tenant["escola_id"]
-    usuario_id = tenant.get("sub")
-    
-    # Inserir no banco garantindo a separação por escola_id EXCLUSIVAMENTE via JWT
-    query = "INSERT INTO turmas (nome, escola_id) VALUES ($1, $2::uuid) RETURNING id"
-    try:
-        turma_id = await conn.fetchval(query, turma.nome, escola_id)
-        
-        # Auditoria
-        ip = request.client.host if request.client else "unknown"
-        await registrar_auditoria(
-            conn, 
-            usuario_id=usuario_id, 
-            acao='CREATE_TURMA', 
-            detalhes={"turma_id": str(turma_id), "nome": turma.nome}, 
-            ip_address=ip
-        )
-        
-        return {"id": str(turma_id), "nome": turma.nome, "escola_id": escola_id}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/core/turmas")
-async def listar_turmas(
-    tenant: dict = Depends(get_tenant_context),
-    conn: asyncpg.Connection = Depends(get_db)
-):
-    escola_id = tenant["escola_id"]
-    
-    # Filtrar dados EXCLUSIVAMENTE pelo tenant extraído do JWT
-    query = "SELECT id, nome FROM turmas WHERE escola_id = $1::uuid"
-    rows = await conn.fetch(query, escola_id)
-    
-    # Convertendo UUIDs para string para evitar erros de serialização JSON
-    return [{"id": str(row["id"]), "nome": row["nome"]} for row in rows]
-
-
 
 @app.post("/core/notas")
 async def criar_nota(
