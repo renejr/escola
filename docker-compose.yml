@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  gateway_service:
+    build:
+      context: ./gateway_service
+    container_name: saas_escola_gateway
+    ports:
+      - "8080:8080" # Exposto para o Nginx fazer o proxy_pass
+    networks:
+      - escola-net
+    environment:
+      - AUTH_SERVICE_URL=http://auth_service:8081
+      - CORE_SERVICE_URL=http://core_service:8082
+    restart: unless-stopped
+
+  auth_service:
+    build:
+      context: ./auth_service
+    container_name: saas_escola_auth
+    expose:
+      - "8081" # Blindado, acessível apenas na rede interna
+    networks:
+      - escola-net
+    env_file:
+      - ./auth_service/.env
+    restart: unless-stopped
+
+  core_service:
+    build:
+      context: ./core_service
+    container_name: saas_escola_core
+    expose:
+      - "8082" # Blindado, acessível apenas na rede interna
+    networks:
+      - escola-net
+    env_file:
+      - ./core_service/.env
+    environment:
+      # O endereço do Ollama precisa ser acessível a partir do container.
+      # Se o Ollama rodar no host (VPS), use o IP do host na rede do docker, ex: 172.17.0.1 ou host.docker.internal
+      - OLLAMA_URL=http://host.docker.internal:11434
+    restart: unless-stopped
+
+networks:
+  escola-net:
+    driver: bridge
