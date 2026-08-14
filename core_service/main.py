@@ -23,6 +23,8 @@ from router_professores import router as professores_router
 from router_turmas import router as turmas_router
 from router_agenda import router as agenda_router
 from router_notificacoes import router as notificacoes_router
+from router_usuarios import router as usuarios_router
+from router_whatsapp import router as whatsapp_router
 
 app.include_router(responsaveis_router)
 app.include_router(alunos_router)
@@ -32,6 +34,8 @@ app.include_router(professores_router)
 app.include_router(turmas_router)
 app.include_router(agenda_router)
 app.include_router(notificacoes_router)
+app.include_router(usuarios_router)
+app.include_router(whatsapp_router)
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 LLM_TIMEOUT = int(os.getenv("LLM_TIMEOUT", "30"))

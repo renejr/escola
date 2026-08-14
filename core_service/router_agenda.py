@@ -1,10 +1,12 @@
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, BackgroundTasks
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 import asyncpg
 
 from deps import get_db, require_role, get_tenant_context, registrar_auditoria
+from services.email_service import enviar_email_notificacao
+from services.whatsapp_service import enviar_mensagem_whatsapp
 
 router = APIRouter(prefix="/core/agenda", tags=["Agenda"])
 
@@ -31,6 +33,7 @@ class EventoAgendaOut(BaseModel):
 async def criar_evento(
     evento: EventoAgendaCreate, 
     request: Request,
+    background_tasks: BackgroundTasks,
     tenant: dict = Depends(require_role(['admin', 'diretor', 'secretario'])),
     conn: asyncpg.Connection = Depends(get_db)
 ):
@@ -74,6 +77,26 @@ async def criar_evento(
                 VALUES ($1::uuid, $2, $3, $4::uuid)
             """
             await conn.execute(notif_query, escola_id, tit, msg, turma_uuid)
+            
+            # Busca usuários para notificar
+            users_query = "SELECT email, celular, nome FROM usuarios WHERE escola_id = $1::uuid AND ativo = TRUE"
+            users = await conn.fetch(users_query, escola_id)
+            
+            html_body = f"""
+            <html>
+                <body>
+                    <h2>Novo Evento Escolar: {evento.titulo}</h2>
+                    <p><strong>Data:</strong> {evento.data_inicio.strftime('%d/%m/%Y %H:%M')}</p>
+                    <p>{evento.descricao or ''}</p>
+                </body>
+            </html>
+            """
+            
+            for u in users:
+                if u['email']:
+                    background_tasks.add_task(enviar_email_notificacao, u['email'], tit, html_body)
+                if u['celular']:
+                    background_tasks.add_task(enviar_mensagem_whatsapp, u['celular'], f"{tit} - {msg}")
         
         return {
             **dict(row), 

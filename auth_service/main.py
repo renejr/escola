@@ -35,7 +35,7 @@ async def get_db():
 @app.post("/auth/login")
 async def login(req: LoginRequest, request: Request, conn: asyncpg.Connection = Depends(get_db)):
     # Buscar usuário no banco
-    query = "SELECT id, escola_id, papel, senha_hash FROM usuarios WHERE email = $1"
+    query = "SELECT id, nome, escola_id, papel, senha_hash FROM usuarios WHERE email = $1"
     user = await conn.fetchrow(query, req.email)
     
     if not user:
@@ -77,7 +77,8 @@ async def login(req: LoginRequest, request: Request, conn: asyncpg.Connection = 
         "access_token": token, 
         "token_type": "bearer",
         "escola_id": user['escola_id'],
-        "role": user['papel']
+        "role": user['papel'],
+        "nome": user['nome']
     }
 
 @app.post("/auth/logout")

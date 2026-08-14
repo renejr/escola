@@ -30,6 +30,8 @@ Sistema Multitenant de Gestão Escolar com backend em Python (FastAPI) e fronten
 - Catálogo de Matérias e Grade Curricular.
 - Agenda Escolar (Calendário interativo, Eventos Globais e por Turma).
 - Central de Notificações (Sino com Badge e avisos automáticos gerados pela Agenda).
+- Controle de Usuários (Gerenciamento mestre de perfis e acessos do sistema).
+- Mensageria Global e Alertas (Disparo de E-mails via SMTP e Integração WhatsApp via Evolution API).
 - Trilha de Auditoria (Logs interceptados diretamente nas requisições do backend).
 - Sistema de Lembretes e Mensageria (WebSocket).
 - Frontend com design moderno (Material 3 e Layout Responsivo Desktop/Mobile).

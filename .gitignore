@@ -41,6 +41,11 @@ venv.bak/
 .DS_Store
 Thumbs.db
 
+# Test Scripts
+test_email.py
+test_smtp.py
+test_smtp2.py
+
 # Flutter/Dart
 app_escola/.dart_tool/
 app_escola/.flutter-plugins
