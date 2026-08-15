@@ -71,7 +71,7 @@ async def listar_turmas(
     tenant: dict = Depends(get_tenant_context),
     conn: asyncpg.Connection = Depends(get_db)
 ):
-    escola_id = tenant["escola_id"]
+    escola_id = tenant.get("escola_id")
     
     query = """
         SELECT t.id, t.nome, t.escola_id, t.turno, t.ano_letivo, t.sala, t.ativo,

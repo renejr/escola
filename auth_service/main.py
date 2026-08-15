@@ -54,7 +54,7 @@ async def login(req: LoginRequest, request: Request, conn: asyncpg.Connection = 
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {
         "sub": str(user['id']),
-        "escola_id": str(user['escola_id']),
+        "escola_id": str(user['escola_id']) if user['escola_id'] else None,
         "role": user['papel'],
         "exp": expire
     }
@@ -66,9 +66,10 @@ async def login(req: LoginRequest, request: Request, conn: asyncpg.Connection = 
     ip = request.client.host if request.client else "unknown"
     detalhes = json.dumps({"email": req.email})
     try:
+        escola_id_val = str(user['escola_id']) if user['escola_id'] else await conn.fetchval("SELECT id FROM escolas LIMIT 1")
         await conn.execute(
-            "INSERT INTO audit_logs (usuario_id, acao, detalhes, ip_address) VALUES ($1, $2, $3::jsonb, $4)",
-            str(user['id']), 'LOGIN', detalhes, ip
+            "INSERT INTO audit_logs (escola_id, usuario_id, acao, detalhes, ip_address) VALUES ($1::uuid, $2::uuid, $3, $4::jsonb, $5)",
+            str(escola_id_val), str(user['id']), 'LOGIN', detalhes, ip
         )
     except Exception as e:
         print(f"Erro ao registrar auditoria de login: {e}")
@@ -88,11 +89,15 @@ async def logout(request: Request, authorization: str = Header(None), conn: asyn
         try:
             payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
             user_id = payload.get("sub")
+            escola_id = payload.get("escola_id")
+            if not escola_id:
+                escola_id = await conn.fetchval("SELECT id FROM escolas LIMIT 1")
+            
             ip = request.client.host if request.client else "unknown"
             
             await conn.execute(
-                "INSERT INTO audit_logs (usuario_id, acao, detalhes, ip_address) VALUES ($1, $2, $3::jsonb, $4)",
-                user_id, 'LOGOUT', '{}', ip
+                "INSERT INTO audit_logs (escola_id, usuario_id, acao, detalhes, ip_address) VALUES ($1::uuid, $2::uuid, $3, $4::jsonb, $5)",
+                str(escola_id), user_id, 'LOGOUT', '{}', ip
             )
         except Exception as e:
             print(f"Erro ao processar logout ou auditoria: {e}")

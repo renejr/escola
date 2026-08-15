@@ -23,7 +23,9 @@ Sistema Multitenant de Gestão Escolar com backend em Python (FastAPI) e fronten
 
 ## Funcionalidades Principais
 
-- Autenticação e Controle de Acesso (RBAC: Admin, Diretor, Secretário, Professor).
+- Arquitetura White-label / Multitenant (Escolas isoladas e blindadas no banco de dados com `escola_id`).
+- Painel Super Admin ("Sala Cofre") para gerenciamento global de Escolas/Tenants e KPIs.
+- Autenticação e Controle de Acesso (RBAC estrito: Super Admin, Admin, Diretor, Secretário, Professor).
 - Gestão de Alunos e Responsáveis (Relacionamento N:N com Autocomplete de busca).
 - Gestão de Professores (CRUD completo com Toggle de Ativação/Inativação).
 - Gestão de Turmas (Interface em Abas: Info, Alunos, Grade Curricular).
@@ -32,7 +34,6 @@ Sistema Multitenant de Gestão Escolar com backend em Python (FastAPI) e fronten
 - Central de Notificações (Sino com Badge e avisos automáticos gerados pela Agenda).
 - Controle de Usuários (Gerenciamento mestre de perfis e acessos do sistema).
 - Mensageria Global e Alertas (Disparo de E-mails via SMTP e Integração WhatsApp via Evolution API).
-- Trilha de Auditoria (Logs interceptados diretamente nas requisições do backend).
-- Sistema de Lembretes e Mensageria (WebSocket).
-- Frontend com design moderno (Material 3 e Layout Responsivo Desktop/Mobile).
-- Testes E2E (End-to-End) garantindo a confiabilidade dos endpoints.
+- Trilha de Auditoria com suporte Multitenant (Logs rastreados por Tenant/Escola).
+- Frontend com design moderno (Material 3 e Layouts isolados: MainLayout vs SuperAdminLayout).
+- Suite de Testes E2E (Automação completa do fluxo do SuperAdmin, CRUDs e blindagem de segurança por Roles).

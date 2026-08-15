@@ -52,8 +52,8 @@ async def criar_aluno(
     """
     
     query_resp = """
-        INSERT INTO aluno_responsavel (aluno_id, responsavel_id, parentesco, financeiro)
-        VALUES ($1::uuid, $2::uuid, $3, $4)
+        INSERT INTO aluno_responsavel (escola_id, aluno_id, responsavel_id, parentesco, financeiro)
+        VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5)
     """
     
     try:
@@ -64,7 +64,7 @@ async def criar_aluno(
             )
             
             for resp in aluno.responsaveis:
-                await conn.execute(query_resp, aluno_id, resp.responsavel_id, resp.parentesco, resp.financeiro)
+                await conn.execute(query_resp, escola_id, aluno_id, resp.responsavel_id, resp.parentesco, resp.financeiro)
                 
             ip = request.client.host if request.client else "unknown"
             await registrar_auditoria(
@@ -183,11 +183,11 @@ async def atualizar_aluno(
                 # Remove os antigos e insere os novos
                 await conn.execute("DELETE FROM aluno_responsavel WHERE aluno_id = $1::uuid", aluno_id)
                 query_resp = """
-                    INSERT INTO aluno_responsavel (aluno_id, responsavel_id, parentesco, financeiro)
-                    VALUES ($1::uuid, $2::uuid, $3, $4)
+                    INSERT INTO aluno_responsavel (escola_id, aluno_id, responsavel_id, parentesco, financeiro)
+                    VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5)
                 """
                 for resp in responsaveis:
-                    await conn.execute(query_resp, aluno_id, resp['responsavel_id'], resp['parentesco'], resp['financeiro'])
+                    await conn.execute(query_resp, escola_id, aluno_id, resp['responsavel_id'], resp['parentesco'], resp['financeiro'])
             
             ip = request.client.host if request.client else "unknown"
             campos = list(update_data.keys())

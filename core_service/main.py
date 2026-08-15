@@ -25,6 +25,8 @@ from router_agenda import router as agenda_router
 from router_notificacoes import router as notificacoes_router
 from router_usuarios import router as usuarios_router
 from router_whatsapp import router as whatsapp_router
+from router_escolas import router as escolas_router
+from router_superadmin import router as superadmin_router
 
 app.include_router(responsaveis_router)
 app.include_router(alunos_router)
@@ -36,6 +38,8 @@ app.include_router(agenda_router)
 app.include_router(notificacoes_router)
 app.include_router(usuarios_router)
 app.include_router(whatsapp_router)
+app.include_router(escolas_router)
+app.include_router(superadmin_router)
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 LLM_TIMEOUT = int(os.getenv("LLM_TIMEOUT", "30"))
@@ -202,7 +206,7 @@ async def obter_dashboard(
     tenant: dict = Depends(get_tenant_context),
     conn: asyncpg.Connection = Depends(get_db)
 ):
-    escola_id = tenant["escola_id"]
+    escola_id = tenant.get("escola_id")
     
     try:
         total_turmas = await conn.fetchval("SELECT COUNT(id) FROM turmas WHERE escola_id = $1::uuid", escola_id)

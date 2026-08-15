@@ -45,6 +45,7 @@ Thumbs.db
 test_email.py
 test_smtp.py
 test_smtp2.py
+.pytest_cache/
 
 # Flutter/Dart
 app_escola/.dart_tool/

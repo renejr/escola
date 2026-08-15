@@ -23,8 +23,8 @@ async def listar_notificacoes(
     tenant: dict = Depends(get_tenant_context),
     conn: asyncpg.Connection = Depends(get_db)
 ):
-    escola_id = tenant["escola_id"]
-    
+    escola_id = tenant.get("escola_id")
+
     query = """
         SELECT id, escola_id, titulo, mensagem, lido, turma_id, criado_em
         FROM notificacoes
