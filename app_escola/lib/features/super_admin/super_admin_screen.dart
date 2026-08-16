@@ -58,6 +58,11 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
     final razaoController = TextEditingController(text: escola?.razaoSocial);
     final fantasiaController = TextEditingController(text: escola?.nomeFantasia);
     final cnpjController = TextEditingController(text: isEditing ? _cnpjMask.maskText(escola.cnpj) : '');
+    
+    // Admin fields
+    final adminNomeController = TextEditingController();
+    final adminEmailController = TextEditingController();
+    final adminSenhaController = TextEditingController();
 
     showModalBottomSheet(
       context: context,
@@ -73,76 +78,123 @@ class _SuperAdminScreenState extends State<SuperAdminScreen> {
           ),
           child: Form(
             key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  isEditing ? 'Editar Tenant (Escola)' : 'Provisionar Nova Escola',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: razaoController,
-                  decoration: const InputDecoration(labelText: 'Razão Social', border: OutlineInputBorder()),
-                  validator: (val) => val == null || val.isEmpty ? 'Obrigatório' : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: fantasiaController,
-                  decoration: const InputDecoration(labelText: 'Nome Fantasia', border: OutlineInputBorder()),
-                  validator: (val) => val == null || val.isEmpty ? 'Obrigatório' : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: cnpjController,
-                  inputFormatters: [_cnpjMask],
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'CNPJ', border: OutlineInputBorder()),
-                  validator: (val) => val == null || val.isEmpty ? 'Obrigatório' : null,
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () async {
-                      if (!formKey.currentState!.validate()) return;
-                      final unmaskedCnpj = _cnpjMask.getUnmaskedText();
-                      final novaEscola = Escola(
-                        id: escola?.id ?? '',
-                        razaoSocial: razaoController.text,
-                        nomeFantasia: fantasiaController.text,
-                        cnpj: unmaskedCnpj,
-                      );
-                      
-                      Navigator.pop(ctx);
-                      setState(() => _isLoading = true);
-                      
-                      try {
-                        if (isEditing) {
-                          await _repository.updateEscola(escola.id, novaEscola);
-                        } else {
-                          await _repository.createEscola(novaEscola);
-                        }
-                        await _loadData();
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(isEditing ? 'Escola atualizada' : 'Escola provisionada')),
-                          );
-                        }
-                      } catch (e) {
-                        setState(() => _isLoading = false);
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Erro: $e')),
-                          );
-                        }
-                      }
-                    },
-                    child: Text(isEditing ? 'Salvar Alterações' : 'Provisionar Escola'),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Text(
+                      isEditing ? 'Editar Tenant (Escola)' : 'Provisionar Nova Escola',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-              ],
+                  const SizedBox(height: 16),
+                  const Text('Dados da Instituição', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: razaoController,
+                    decoration: const InputDecoration(labelText: 'Razão Social', border: OutlineInputBorder()),
+                    validator: (val) => val == null || val.isEmpty ? 'Obrigatório' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: fantasiaController,
+                    decoration: const InputDecoration(labelText: 'Nome Fantasia', border: OutlineInputBorder()),
+                    validator: (val) => val == null || val.isEmpty ? 'Obrigatório' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: cnpjController,
+                    inputFormatters: [_cnpjMask],
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'CNPJ', border: OutlineInputBorder()),
+                    validator: (val) => val == null || val.isEmpty ? 'Obrigatório' : null,
+                  ),
+                  
+                  if (!isEditing) ...[
+                    const SizedBox(height: 24),
+                    const Text('Dados do Administrador (Gestor)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: adminNomeController,
+                      decoration: const InputDecoration(labelText: 'Nome do Administrador', border: OutlineInputBorder()),
+                      validator: (val) => val == null || val.isEmpty ? 'Obrigatório' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: adminEmailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(labelText: 'E-mail de Login', border: OutlineInputBorder()),
+                      validator: (val) {
+                        if (val == null || val.isEmpty) return 'Obrigatório';
+                        if (!val.contains('@')) return 'E-mail inválido';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: adminSenhaController,
+                      obscureText: true,
+                      decoration: const InputDecoration(labelText: 'Senha Inicial', border: OutlineInputBorder()),
+                      validator: (val) => val == null || val.isEmpty ? 'Obrigatório' : null,
+                    ),
+                  ],
+                  
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () async {
+                        if (!formKey.currentState!.validate()) return;
+                        final unmaskedCnpj = _cnpjMask.getUnmaskedText();
+                        
+                        Navigator.pop(ctx);
+                        setState(() => _isLoading = true);
+                        
+                        try {
+                          if (isEditing) {
+                            final novaEscola = Escola(
+                              id: escola.id,
+                              razaoSocial: razaoController.text,
+                              nomeFantasia: fantasiaController.text,
+                              cnpj: unmaskedCnpj,
+                            );
+                            await _repository.updateEscola(escola.id, novaEscola);
+                          } else {
+                            final payload = {
+                              'razao_social': razaoController.text,
+                              'nome_fantasia': fantasiaController.text,
+                              'cnpj': unmaskedCnpj,
+                              'admin_nome': adminNomeController.text,
+                              'admin_email': adminEmailController.text,
+                              'admin_senha': adminSenhaController.text,
+                            };
+                            await _repository.createEscola(payload);
+                          }
+                          await _loadData();
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(isEditing ? 'Escola atualizada' : 'Escola e Administrador provisionados')),
+                            );
+                          }
+                        } catch (e) {
+                          setState(() => _isLoading = false);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('$e')),
+                            );
+                          }
+                        }
+                      },
+                      child: Text(isEditing ? 'Salvar Alterações' : 'Provisionar Escola'),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
             ),
           ),
         );

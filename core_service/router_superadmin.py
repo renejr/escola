@@ -4,6 +4,8 @@ from typing import List, Optional
 from asyncpg.connection import Connection
 from deps import require_superadmin, get_db
 
+import bcrypt
+
 router = APIRouter(prefix="/core/superadmin", tags=["Super Admin"])
 
 class EscolaCreate(BaseModel):
@@ -12,6 +14,9 @@ class EscolaCreate(BaseModel):
     nome_fantasia: str
     email_contato: Optional[str] = None
     telefone: Optional[str] = None
+    admin_nome: str
+    admin_email: str
+    admin_senha: str
 
 class EscolaUpdate(BaseModel):
     razao_social: str
@@ -57,21 +62,42 @@ async def create_escola(
     if exists:
         raise HTTPException(status_code=400, detail="CNPJ já cadastrado em outra escola.")
         
-    query = """
-        INSERT INTO escolas (razao_social, cnpj, nome_fantasia, email_contato, telefone, ativo, nome)
-        VALUES ($1, $2, $3, $4, $5, 'true', $6)
-        RETURNING id
-    """
-    new_id = await conn.fetchval(
-        query,
-        escola.razao_social,
-        escola.cnpj,
-        escola.nome_fantasia,
-        escola.email_contato,
-        escola.telefone,
-        escola.nome_fantasia
-    )
-    return {"message": "Escola provisionada com sucesso", "id": new_id}
+    # Check if admin_email already exists in usuarios
+    email_exists = await conn.fetchval("SELECT id FROM usuarios WHERE email = $1", escola.admin_email)
+    if email_exists:
+        raise HTTPException(status_code=400, detail="E-mail do administrador já está em uso por outro usuário.")
+
+    async with conn.transaction():
+        query_escola = """
+            INSERT INTO escolas (razao_social, cnpj, nome_fantasia, email_contato, telefone, ativo, nome)
+            VALUES ($1, $2, $3, $4, $5, 'true', $6)
+            RETURNING id
+        """
+        new_escola_id = await conn.fetchval(
+            query_escola,
+            escola.razao_social,
+            escola.cnpj,
+            escola.nome_fantasia,
+            escola.email_contato,
+            escola.telefone,
+            escola.nome_fantasia
+        )
+        
+        senha_hash = bcrypt.hashpw(escola.admin_senha.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        
+        query_usuario = """
+            INSERT INTO usuarios (escola_id, email, senha_hash, papel, nome, ativo)
+            VALUES ($1::uuid, $2, $3, 'admin', $4, TRUE)
+        """
+        await conn.execute(
+            query_usuario,
+            new_escola_id,
+            escola.admin_email,
+            senha_hash,
+            escola.admin_nome
+        )
+
+    return {"message": "Escola e Administrador provisionados com sucesso", "id": new_escola_id}
 
 @router.put("/escolas/{escola_id}")
 async def update_escola(

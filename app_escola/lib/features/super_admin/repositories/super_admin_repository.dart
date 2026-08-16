@@ -34,11 +34,11 @@ class SuperAdminRepository {
     }
   }
 
-  Future<void> createEscola(Escola escola) async {
+  Future<void> createEscola(Map<String, dynamic> escolaData) async {
     try {
-      await _apiClient.dio.post('/core/superadmin/escolas', data: escola.toJson());
+      await _apiClient.dio.post('/core/superadmin/escolas', data: escolaData);
     } catch (e) {
-      throw Exception(_handleError(e, 'Erro ao criar escola.'));
+      throw Exception(_handleError(e, 'Erro ao criar escola e administrador.'));
     }
   }
 

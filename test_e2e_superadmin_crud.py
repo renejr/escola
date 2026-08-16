@@ -30,18 +30,23 @@ async def test_superadmin_crud_fluxo_completo():
         resp_kpis = await client.get(f"{CORE_URL}/superadmin/kpis", headers=headers)
         assert resp_kpis.status_code == 200, f"Falha ao listar KPIs: {resp_kpis.text}"
         
-        # 3. Criar uma nova Escola Mock
+        # 3. Criar uma nova Escola Mock e seu primeiro Admin
         mock_cnpj = f"99.999.999/{str(uuid.uuid4().int)[:4]}-99"
+        mock_admin_email = f"admin_{str(uuid.uuid4().int)[:4]}@e2e.com"
+        
         nova_escola = {
             "razao_social": "Escola de Teste E2E",
             "nome_fantasia": "Teste E2E",
             "cnpj": mock_cnpj,
             "email_contato": "teste@e2e.com",
-            "telefone": "11999999999"
+            "telefone": "11999999999",
+            "admin_nome": "Gestor E2E",
+            "admin_email": mock_admin_email,
+            "admin_senha": "senhaforte123"
         }
         
         resp_create = await client.post(f"{CORE_URL}/superadmin/escolas", json=nova_escola, headers=headers)
-        assert resp_create.status_code == 200, f"Falha ao criar escola: {resp_create.text}"
+        assert resp_create.status_code == 200, f"Falha ao criar escola e admin: {resp_create.text}"
         escola_id = resp_create.json()["id"]
         
         # 4. Listar Escolas (garantir que a recém-criada está lá)
@@ -65,7 +70,7 @@ async def test_superadmin_crud_fluxo_completo():
         resp_toggle = await client.patch(f"{CORE_URL}/superadmin/escolas/{escola_id}/toggle-status", headers=headers)
         assert resp_toggle.status_code == 200, f"Falha ao fazer toggle do status: {resp_toggle.text}"
         
-        # 7. Validar auditoria no banco de dados (Login)
+        # 8. Validar se o usuário Admin foi criado
         conn = await asyncpg.connect(DB_URL)
         try:
             # Puxa o último log do superadmin
@@ -79,7 +84,14 @@ async def test_superadmin_crud_fluxo_completo():
             log = await conn.fetchrow(query_audit)
             assert log is not None, "Nenhum log de auditoria encontrado"
             assert log['escola_id'] is not None, "Log de auditoria foi gravado sem escola_id (NOT NULL bypass)"
+            
+            # Valida o admin_usuario inserido
+            query_usuario = "SELECT id, papel, escola_id FROM usuarios WHERE email = $1"
+            admin_user = await conn.fetchrow(query_usuario, mock_admin_email)
+            assert admin_user is not None, "Usuário admin não foi inserido no banco."
+            assert admin_user['papel'] == 'admin', "O papel do novo usuário não é 'admin'."
+            assert str(admin_user['escola_id']) == str(escola_id), "O escola_id do admin não corresponde à escola criada."
         finally:
             await conn.close()
             
-        print("Teste E2E Completo e Auditoria validados com sucesso!")
+        print("Teste E2E Completo, Transação e Auditoria validados com sucesso!")

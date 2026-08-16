@@ -24,6 +24,7 @@ Sistema Multitenant de Gestão Escolar com backend em Python (FastAPI) e fronten
 ## Funcionalidades Principais
 
 - Arquitetura White-label / Multitenant (Escolas isoladas e blindadas no banco de dados com `escola_id`).
+- Provisionamento Atômico de Tenants (Criação simultânea da Instituição e seu Usuário Administrador inicial).
 - Painel Super Admin ("Sala Cofre") para gerenciamento global de Escolas/Tenants e KPIs.
 - Autenticação e Controle de Acesso (RBAC estrito: Super Admin, Admin, Diretor, Secretário, Professor).
 - Gestão de Alunos e Responsáveis (Relacionamento N:N com Autocomplete de busca).
