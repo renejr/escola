@@ -27,6 +27,10 @@ from router_usuarios import router as usuarios_router
 from router_whatsapp import router as whatsapp_router
 from router_escolas import router as escolas_router
 from router_superadmin import router as superadmin_router
+from router_diario import router as diario_router
+from router_periodos import router as periodos_router
+from router_financeiro import router as financeiro_router
+from router_webhooks import router as webhooks_router
 
 app.include_router(responsaveis_router)
 app.include_router(alunos_router)
@@ -40,6 +44,10 @@ app.include_router(usuarios_router)
 app.include_router(whatsapp_router)
 app.include_router(escolas_router)
 app.include_router(superadmin_router)
+app.include_router(diario_router)
+app.include_router(periodos_router)
+app.include_router(financeiro_router)
+app.include_router(webhooks_router)
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 LLM_TIMEOUT = int(os.getenv("LLM_TIMEOUT", "30"))

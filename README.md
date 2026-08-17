@@ -36,5 +36,8 @@ Sistema Multitenant de Gestão Escolar com backend em Python (FastAPI) e fronten
 - Controle de Usuários (Gerenciamento mestre de perfis e acessos do sistema).
 - Mensageria Global e Alertas (Disparo de E-mails via SMTP e Integração WhatsApp via Evolution API).
 - Trilha de Auditoria com suporte Multitenant (Logs rastreados por Tenant/Escola).
+- Diário de Classe Web/Desktop (Otimizado com Optimistic UI e Debounce para digitação ultra-rápida).
+- Gestão de Anos e Períodos Letivos (Arquitetura de "Ano Ativo" exclusivo).
+- Módulo Financeiro Integrado (Emissão instantânea de PIX via Mercado Pago e conciliação automática via Webhooks).
 - Frontend com design moderno (Material 3 e Layouts isolados: MainLayout vs SuperAdminLayout).
 - Suite de Testes E2E (Automação completa do fluxo do SuperAdmin, CRUDs e blindagem de segurança por Roles).

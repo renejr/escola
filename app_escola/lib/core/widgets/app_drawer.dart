@@ -69,6 +69,14 @@ class AppDrawer extends StatelessWidget {
             title: const Text('Gestão de Alunos'),
             onTap: () => _navigate(context, '/alunos'),
           ),
+          RoleGuard(
+            allowedRoles: const ['admin', 'diretor', 'secretaria'],
+            child: ListTile(
+              leading: const Icon(Icons.attach_money),
+              title: const Text('Gestão Financeira'),
+              onTap: () => _navigate(context, '/financeiro'),
+            ),
+          ),
           ListTile(
             leading: const Icon(Icons.family_restroom),
             title: const Text('Gestão de Responsáveis'),
@@ -89,6 +97,14 @@ class AppDrawer extends StatelessWidget {
               ),
             ),
           ),
+          RoleGuard(
+            allowedRoles: const ['admin', 'diretor'],
+            child: ListTile(
+              leading: const Icon(Icons.event_note),
+              title: const Text('Períodos Letivos'),
+              onTap: () => _navigate(context, '/periodos'),
+            ),
+          ),
           ListTile(
             leading: const Icon(Icons.menu_book),
             title: const Text('Grade de Matérias'),
@@ -98,6 +114,14 @@ class AppDrawer extends StatelessWidget {
             leading: const Icon(Icons.class_),
             title: const Text('Gestão de Turmas'),
             onTap: () => _navigate(context, '/turmas'),
+          ),
+          RoleGuard(
+            allowedRoles: const ['admin', 'diretor', 'professor'],
+            child: ListTile(
+              leading: const Icon(Icons.edit_note),
+              title: const Text('Diário de Classe'),
+              onTap: () => _navigate(context, '/diario'),
+            ),
           ),
           ListTile(
             leading: const Icon(Icons.calendar_month),

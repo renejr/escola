@@ -11,8 +11,11 @@ import '../../features/secretaria/responsaveis_screen.dart';
 import '../../features/secretaria/professores_screen.dart';
 import '../../features/academico/materias_screen.dart';
 import '../../features/academico/agenda_screen.dart';
+import '../../features/academico/screens/diario_screen.dart';
+import '../../features/academico/screens/periodos_letivos_screen.dart';
 import '../../features/escolar/turmas_screen.dart';
 import '../../features/chat/chat_screen.dart';
+import '../../features/financeiro/screens/financeiro_screen.dart';
 import '../../features/memory/memory_screen.dart';
 import '../../features/auditoria/audit_screen.dart';
 import '../../features/seguranca/usuarios_screen.dart';
@@ -93,6 +96,15 @@ class _MainLayoutState extends State<MainLayout> {
         break;
       case '/agenda':
         page = const AgendaScreen();
+        break;
+      case '/financeiro':
+        page = const FinanceiroScreen();
+        break;
+      case '/diario':
+        page = const DiarioScreen();
+        break;
+      case '/periodos':
+        page = const PeriodosLetivosScreen();
         break;
       case '/turmas':
         page = const TurmasScreen();
