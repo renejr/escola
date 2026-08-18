@@ -1,7 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../repositories/financeiro_repository.dart';
 
 class FinanceiroScreen extends StatefulWidget {
@@ -104,45 +104,16 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
     return aluno != null ? aluno['nome'] : 'Desconhecido';
   }
 
-  void _showPixDialog(String qrCodeBase64, String ticketUrl) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Cobrança PIX Gerada', textAlign: TextAlign.center),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 200,
-              height: 200,
-              decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300)),
-              child: Image.memory(base64Decode(qrCodeBase64), fit: BoxFit.contain),
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.copy),
-              label: const Text('Copiar Código Pix (Copia e Cola)'),
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: ticketUrl));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Código Pix copiado para a área de transferência!')),
-                );
-              },
-            ),
-          ],
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _loadData();
-            },
-            child: const Text('Concluir'),
-          ),
-        ],
-      ),
-    );
+  Future<void> _launchUrl(String? urlString) async {
+    if (urlString == null || urlString.isEmpty) return;
+    final Uri url = Uri.parse(urlString);
+    if (!await launchUrl(url)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Não foi possível abrir o link: $urlString')),
+        );
+      }
+    }
   }
 
   void _showAddDialog() {
@@ -155,7 +126,7 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: const Text('Nova Cobrança'),
+            title: const Text('Nova Fatura (Checkout Pro)'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -192,15 +163,6 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
                     if (date != null) setDialogState(() => dataVencimento = date);
                   },
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  decoration: const InputDecoration(
-                    labelText: 'Método de Pagamento',
-                    border: OutlineInputBorder(),
-                  ),
-                  controller: TextEditingController(text: 'PIX'),
-                  enabled: false,
-                ),
               ],
             ),
             actions: [
@@ -211,31 +173,38 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
                     final valor = double.tryParse(valorController.text.replaceAll(',', '.'));
                     if (valor == null) return;
                     
+                    // Salvar o scaffoldMessenger antes de fechar o dialog
+                    final scaffoldMessenger = ScaffoldMessenger.of(context);
+                    
                     Navigator.pop(context);
+                    
+                    if (!mounted) return;
                     setState(() => _isLoading = true);
                     
                     try {
                       final response = await _repository.createConta({
                         'aluno_id': selectedAlunoId,
                         'valor': valor,
-                        'data_vencimento': DateFormat('yyyy-MM-dd').format(dataVencimento),
-                        'metodo_pagamento': 'pix'
+                        'data_vencimento': DateFormat('yyyy-MM-dd').format(dataVencimento)
                       });
                       
-                      if (response['qr_code_base64'] != null) {
-                        _showPixDialog(response['qr_code_base64'], response['qr_code_copia_cola']);
-                      } else {
-                        await _loadData();
+                      if (!mounted) return;
+                      await _loadData();
+                      
+                      if (response['checkout_url'] != null) {
+                        scaffoldMessenger.showSnackBar(
+                          const SnackBar(content: Text('Link de pagamento gerado com sucesso!')),
+                        );
                       }
                     } catch (e) {
-                      setState(() => _isLoading = false);
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                        setState(() => _isLoading = false);
                       }
+                      scaffoldMessenger.showSnackBar(SnackBar(content: Text(e.toString())));
                     }
                   }
                 },
-                child: const Text('Gerar Cobrança'),
+                child: const Text('Gerar Fatura'),
               ),
             ],
           );
@@ -312,18 +281,19 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
                                 DataColumn(label: Text('Aluno/Responsável')),
                                 DataColumn(label: Text('Valor')),
                                 DataColumn(label: Text('Status')),
-                                DataColumn(label: Text('Método')),
+                                DataColumn(label: Text('Ações')),
                               ],
                               rows: _contas.map((c) {
                                 final status = c['status'];
                                 final dtVenc = c['data_vencimento'];
                                 final color = _getStatusColor(status, dtVenc);
                                 final dtFormatada = DateFormat('dd/MM/yyyy').format(DateTime.parse(dtVenc));
+                                final checkoutUrl = c['checkout_url'];
                                 return DataRow(
                                   cells: [
                                     DataCell(Text(dtFormatada)),
                                     DataCell(Text(_getAlunoNome(c['aluno_id']))),
-                                    DataCell(Text(_currencyFormat.format(c['valor']))),
+                                    DataCell(Text(_currencyFormat.format(c['valor'] ?? 0.0))),
                                     DataCell(
                                       Chip(
                                         label: Text(_getStatusText(status, dtVenc), style: const TextStyle(color: Colors.white, fontSize: 12)),
@@ -331,7 +301,30 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
                                         padding: EdgeInsets.zero,
                                       ),
                                     ),
-                                    DataCell(Text(c['metodo_pagamento']?.toString().toUpperCase() ?? 'PIX')),
+                                    DataCell(
+                                      checkoutUrl != null 
+                                      ? Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(Icons.link, color: Colors.blue),
+                                              tooltip: 'Abrir Link de Pagamento',
+                                              onPressed: () => _launchUrl(checkoutUrl),
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.copy, color: Colors.grey),
+                                              tooltip: 'Copiar Link',
+                                              onPressed: () {
+                                                Clipboard.setData(ClipboardData(text: checkoutUrl));
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(content: Text('Link copiado!')),
+                                                );
+                                              },
+                                            ),
+                                          ],
+                                        )
+                                      : const Text('-'),
+                                    ),
                                   ],
                                 );
                               }).toList(),

@@ -13,7 +13,7 @@ class ContaReceberCreate(BaseModel):
     responsavel_id: Optional[str] = None
     valor: float
     data_vencimento: date
-    metodo_pagamento: str = "pix"
+    # Removido método de pagamento fixo e tokens de cartão
 
 class ContaReceberResponse(BaseModel):
     id: str
@@ -24,8 +24,8 @@ class ContaReceberResponse(BaseModel):
     status: str
     mp_payment_id: Optional[str]
     metodo_pagamento: Optional[str]
-    qr_code_base64: Optional[str] = None
-    qr_code_copia_cola: Optional[str] = None
+    checkout_url: Optional[str] = None
+    preference_id: Optional[str] = None
 
 @router.get("/contas", response_model=List[ContaReceberResponse])
 async def list_contas(
@@ -55,9 +55,9 @@ async def create_conta(
     
     # 1. Inserir no banco de dados como 'Pendente'
     query = """
-        INSERT INTO contas_receber (escola_id, aluno_id, responsavel_id, valor, data_vencimento, metodo_pagamento)
-        VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6)
-        RETURNING id::text, aluno_id::text, responsavel_id::text, valor, data_vencimento, status, mp_payment_id, metodo_pagamento
+        INSERT INTO contas_receber (escola_id, aluno_id, responsavel_id, valor, data_vencimento, proxima_consulta)
+        VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, NOW() + INTERVAL '5 minutes')
+        RETURNING id::text, aluno_id::text, responsavel_id::text, valor, data_vencimento, status, mp_payment_id, metodo_pagamento, checkout_url, preference_id
     """
     record = await conn.fetchrow(
         query, 
@@ -65,37 +65,35 @@ async def create_conta(
         payload.aluno_id, 
         payload.responsavel_id, 
         payload.valor, 
-        payload.data_vencimento, 
-        payload.metodo_pagamento
+        payload.data_vencimento
     )
     conta = dict(record)
 
-    # Se o método for PIX, já gera a cobrança no Mercado Pago
-    if payload.metodo_pagamento.lower() == 'pix':
-        # TODO: Buscar email real do pagador (aluno ou responsavel)
-        email_pagador = "pagador@sandbox.com" 
-        descricao = f"Mensalidade Escolar - {conta['id']}"
+    email_pagador = "renebmjr@gmail.com" 
+    descricao = f"Mensalidade Escolar - {conta['id']}"
+
+    try:
+        # Gera o Link de Pagamento (Checkout Pro)
+        pref_data = await mp_service.criar_preferencia_pagamento(
+            valor=payload.valor,
+            descricao=descricao,
+            id_interno=conta['id'],
+            email_pagador=email_pagador
+        )
         
-        try:
-            mp_data = await mp_service.gerar_cobranca_pix(
-                valor=payload.valor,
-                email_pagador=email_pagador,
-                descricao=descricao,
-                id_interno=conta['id']
-            )
-            
-            # Atualiza o registro com o ID do Mercado Pago
-            await conn.execute(
-                "UPDATE contas_receber SET mp_payment_id = $1 WHERE id = $2::uuid",
-                mp_data["mp_payment_id"], conta["id"]
-            )
-            
-            conta["mp_payment_id"] = mp_data["mp_payment_id"]
-            conta["qr_code_base64"] = mp_data["qr_code_base64"]
-            conta["qr_code_copia_cola"] = mp_data["qr_code"]
-            
-        except Exception as e:
-            # Em caso de falha na integração, mantemos a conta criada mas sem os dados do MP
-            print(f"Erro ao integrar com Mercado Pago: {e}")
+        # Atualiza o registro com o Link
+        await conn.execute(
+            "UPDATE contas_receber SET checkout_url = $1, preference_id = $2 WHERE id = $3::uuid",
+            pref_data["checkout_url"], pref_data["preference_id"], conta["id"]
+        )
+        
+        conta["checkout_url"] = pref_data["checkout_url"]
+        conta["preference_id"] = pref_data["preference_id"]
+        
+    except Exception as e:
+        print(f"Erro ao integrar com Mercado Pago (Preference): {e}")
+        # Mesmo se falhar o Mercado Pago, retorna a conta criada sem a URL, mas sem quebrar a requisição
+        conta["checkout_url"] = None
+        conta["preference_id"] = None
 
     return conta

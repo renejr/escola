@@ -62,5 +62,63 @@ class MercadoPagoService:
             
         return response["response"]["status"]
 
+    async def criar_preferencia_pagamento(
+        self,
+        valor: float,
+        descricao: str,
+        id_interno: str,
+        email_pagador: str
+    ) -> Dict[str, str]:
+        """
+        Cria um Link de Pagamento (Checkout Pro) no Mercado Pago.
+        """
+        if not self.sdk:
+            raise Exception("SDK do Mercado Pago não inicializado.")
+
+        preference_data = {
+            "items": [
+                {
+                    "title": descricao,
+                    "quantity": 1,
+                    "unit_price": float(valor)
+                }
+            ],
+            "payer": {
+                "email": email_pagador
+            },
+            "external_reference": id_interno
+        }
+
+        response = self.sdk.preference().create(preference_data)
+
+        if response["status"] not in [200, 201]:
+            raise Exception(f"Erro ao criar preferência no Mercado Pago: {response.get('response')}")
+
+        pref_info = response["response"]
+        
+        return {
+            "preference_id": pref_info["id"],
+            "checkout_url": pref_info["sandbox_init_point"] # Mudado para sandbox_init_point para habilitar testes sem travas
+        }
+
+    async def buscar_pagamentos_por_referencia(self, external_reference: str) -> list:
+        """
+        Busca todos os pagamentos atrelados a um external_reference (ID interno).
+        Retorna uma lista de pagamentos.
+        """
+        if not self.sdk:
+            raise Exception("SDK do Mercado Pago não inicializado.")
+
+        filters = {
+            "external_reference": external_reference
+        }
+        
+        response = self.sdk.payment().search(filters)
+        
+        if response["status"] != 200:
+            raise Exception("Erro ao buscar pagamentos por referência.")
+            
+        return response["response"].get("results", [])
+
 # Instância Singleton
 mp_service = MercadoPagoService()

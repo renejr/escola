@@ -31,6 +31,10 @@ from router_diario import router as diario_router
 from router_periodos import router as periodos_router
 from router_financeiro import router as financeiro_router
 from router_webhooks import router as webhooks_router
+from robot_conciliacao import iniciar_robo
+
+# Iniciar o Robô de Conciliação
+iniciar_robo()
 
 app.include_router(responsaveis_router)
 app.include_router(alunos_router)
