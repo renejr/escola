@@ -118,63 +118,129 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
 
   void _showAddDialog() {
     final TextEditingController valorController = TextEditingController();
+    final TextEditingController descontoController = TextEditingController(text: '0.00');
+    final TextEditingController descricaoController = TextEditingController();
     String? selectedAlunoId;
+    String selectedMotivo = 'Mensalidade';
+    int parcelas = 1;
     DateTime dataVencimento = DateTime.now().add(const Duration(days: 3));
+    
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: const Text('Nova Fatura (Checkout Pro)'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(labelText: 'Aluno', border: OutlineInputBorder()),
-                  value: selectedAlunoId,
-                  items: _alunos.map((a) => DropdownMenuItem<String>(
-                    value: a['id'],
-                    child: Text(a['nome']),
-                  )).toList(),
-                  onChanged: (val) => setDialogState(() => selectedAlunoId = val),
+            title: const Text('Nova Fatura (Geração em Lote)'),
+            content: SizedBox(
+              width: 500,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(labelText: 'Aluno', border: OutlineInputBorder()),
+                      value: selectedAlunoId,
+                      items: _alunos.map((a) => DropdownMenuItem<String>(
+                        value: a['id'],
+                        child: Text(a['nome']),
+                      )).toList(),
+                      onChanged: (val) => setDialogState(() => selectedAlunoId = val),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: valorController,
+                            decoration: const InputDecoration(
+                              labelText: 'Valor Bruto (R\$)', 
+                              border: OutlineInputBorder(),
+                              hintText: 'ex: 1000.00'
+                            ),
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextField(
+                            controller: descontoController,
+                            decoration: const InputDecoration(
+                              labelText: 'Desconto (R\$)', 
+                              border: OutlineInputBorder(),
+                              hintText: 'ex: 50.00'
+                            ),
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<int>(
+                            decoration: const InputDecoration(labelText: 'Parcelas', border: OutlineInputBorder()),
+                            value: parcelas,
+                            items: List.generate(12, (i) => i + 1).map((p) => DropdownMenuItem<int>(
+                              value: p,
+                              child: Text('${p}x'),
+                            )).toList(),
+                            onChanged: (val) => setDialogState(() => parcelas = val ?? 1),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.calendar_today),
+                            label: Text('Venc. Inicial: ${DateFormat('dd/MM/yyyy').format(dataVencimento)}'),
+                            onPressed: () async {
+                              final date = await showDatePicker(
+                                context: context,
+                                initialDate: dataVencimento,
+                                firstDate: DateTime.now(),
+                                lastDate: DateTime(2100),
+                              );
+                              if (date != null) setDialogState(() => dataVencimento = date);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(labelText: 'Motivo', border: OutlineInputBorder()),
+                      value: selectedMotivo,
+                      items: ['Mensalidade', 'Material', 'Multa', 'Outros'].map((m) => DropdownMenuItem<String>(
+                        value: m,
+                        child: Text(m),
+                      )).toList(),
+                      onChanged: (val) => setDialogState(() => selectedMotivo = val ?? 'Mensalidade'),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: descricaoController,
+                      decoration: const InputDecoration(
+                        labelText: 'Descrição', 
+                        border: OutlineInputBorder(),
+                        hintText: 'ex: Mensalidade Anual 2026'
+                      ),
+                      maxLines: 2,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: valorController,
-                  decoration: const InputDecoration(
-                    labelText: 'Valor (R\$)', 
-                    border: OutlineInputBorder(),
-                    hintText: 'ex: 450.00'
-                  ),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                ),
-                const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.calendar_today),
-                  label: Text('Vencimento: ${DateFormat('dd/MM/yyyy').format(dataVencimento)}'),
-                  onPressed: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: dataVencimento,
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime(2100),
-                    );
-                    if (date != null) setDialogState(() => dataVencimento = date);
-                  },
-                ),
-              ],
+              ),
             ),
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
               FilledButton(
                 onPressed: () async {
-                  if (selectedAlunoId != null && valorController.text.isNotEmpty) {
-                    final valor = double.tryParse(valorController.text.replaceAll(',', '.'));
-                    if (valor == null) return;
+                  if (selectedAlunoId != null && valorController.text.isNotEmpty && descricaoController.text.isNotEmpty) {
+                    final valorBruto = double.tryParse(valorController.text.replaceAll(',', '.'));
+                    final desconto = double.tryParse(descontoController.text.replaceAll(',', '.')) ?? 0.0;
                     
-                    // Salvar o scaffoldMessenger antes de fechar o dialog
-                    final scaffoldMessenger = ScaffoldMessenger.of(context);
+                    if (valorBruto == null) return;
                     
                     Navigator.pop(context);
                     
@@ -184,27 +250,31 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
                     try {
                       final response = await _repository.createConta({
                         'aluno_id': selectedAlunoId,
-                        'valor': valor,
+                        'valor_bruto': valorBruto,
+                        'desconto': desconto,
+                        'parcelas': parcelas,
+                        'motivo': selectedMotivo,
+                        'descricao': descricaoController.text,
                         'data_vencimento': DateFormat('yyyy-MM-dd').format(dataVencimento)
                       });
                       
                       if (!mounted) return;
                       await _loadData();
                       
-                      if (response['checkout_url'] != null) {
-                        scaffoldMessenger.showSnackBar(
-                          const SnackBar(content: Text('Link de pagamento gerado com sucesso!')),
-                        );
-                      }
+                      scaffoldMessenger.showSnackBar(
+                        SnackBar(content: Text('${response.length} fatura(s) gerada(s) com sucesso!')),
+                      );
                     } catch (e) {
                       if (mounted) {
                         setState(() => _isLoading = false);
                       }
                       scaffoldMessenger.showSnackBar(SnackBar(content: Text(e.toString())));
                     }
+                  } else {
+                     scaffoldMessenger.showSnackBar(const SnackBar(content: Text('Preencha todos os campos obrigatórios.')));
                   }
                 },
-                child: const Text('Gerar Fatura'),
+                child: const Text('Gerar Faturas'),
               ),
             ],
           );
@@ -279,7 +349,8 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
                               columns: const [
                                 DataColumn(label: Text('Vencimento')),
                                 DataColumn(label: Text('Aluno/Responsável')),
-                                DataColumn(label: Text('Valor')),
+                                DataColumn(label: Text('Valor Líquido')),
+                                DataColumn(label: Text('Parcela')),
                                 DataColumn(label: Text('Status')),
                                 DataColumn(label: Text('Ações')),
                               ],
@@ -289,11 +360,15 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
                                 final color = _getStatusColor(status, dtVenc);
                                 final dtFormatada = DateFormat('dd/MM/yyyy').format(DateTime.parse(dtVenc));
                                 final checkoutUrl = c['checkout_url'];
+                                final parcelaAtual = c['parcela_atual'] ?? 1;
+                                final totalParcelas = c['total_parcelas'] ?? 1;
+                                
                                 return DataRow(
                                   cells: [
                                     DataCell(Text(dtFormatada)),
                                     DataCell(Text(_getAlunoNome(c['aluno_id']))),
                                     DataCell(Text(_currencyFormat.format(c['valor'] ?? 0.0))),
+                                    DataCell(Text('$parcelaAtual/$totalParcelas')),
                                     DataCell(
                                       Chip(
                                         label: Text(_getStatusText(status, dtVenc), style: const TextStyle(color: Colors.white, fontSize: 12)),

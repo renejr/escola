@@ -1,6 +1,7 @@
 import os
 import mercadopago
 from typing import Dict, Any
+from datetime import date, datetime, timedelta, timezone
 
 class MercadoPagoService:
     def __init__(self):
@@ -67,13 +68,24 @@ class MercadoPagoService:
         valor: float,
         descricao: str,
         id_interno: str,
-        email_pagador: str
+        email_pagador: str,
+        data_vencimento: date
     ) -> Dict[str, str]:
         """
         Cria um Link de Pagamento (Checkout Pro) no Mercado Pago.
+        Injeta expiration_date_to baseado na data de vencimento (Abordagem A).
         """
         if not self.sdk:
             raise Exception("SDK do Mercado Pago não inicializado.")
+
+        # Definir expiração: Vencimento + 5 dias às 23:59:59 (Horário de Brasília)
+        # Como o banco usa 'date', convertemos para datetime.
+        tz_br = timezone(timedelta(hours=-3))
+        vencimento_dt = datetime.combine(data_vencimento, datetime.min.time()).replace(tzinfo=tz_br)
+        data_expiracao = vencimento_dt + timedelta(days=5)
+        data_expiracao = data_expiracao.replace(hour=23, minute=59, second=59)
+        
+        expiration_str = data_expiracao.isoformat()
 
         preference_data = {
             "items": [
@@ -86,7 +98,9 @@ class MercadoPagoService:
             "payer": {
                 "email": email_pagador
             },
-            "external_reference": id_interno
+            "external_reference": id_interno,
+            "expires": True,
+            "expiration_date_to": expiration_str
         }
 
         response = self.sdk.preference().create(preference_data)

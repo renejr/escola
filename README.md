@@ -38,7 +38,8 @@ Sistema Multitenant de Gestão Escolar com backend em Python (FastAPI) e fronten
 - Trilha de Auditoria com suporte Multitenant (Logs rastreados por Tenant/Escola).
 - Diário de Classe Web/Desktop (Otimizado com Optimistic UI e Debounce para digitação ultra-rápida).
 - Gestão de Anos e Períodos Letivos (Arquitetura de "Ano Ativo" exclusivo).
-- Módulo Financeiro Integrado (Checkout Pro via Mercado Pago, com geração de links de pagamento universais).
-- Motor de Conciliação Ativa Financeira (Robô de *Active Polling* assíncrono via APScheduler + Webhooks para baixa automática).
+- Módulo Financeiro Integrado (Geração de Carnês em Lote, rateio automático e links de Checkout Pro via Mercado Pago).
+- Motor de Conciliação Ativa Financeira (Robô Assíncrono com Janela Contínua de 5 Dias e auto-arquivamento).
+- Régua de Cobrança Automatizada (Robô de Notificações D-5 e D-0 com envio de E-mails HTML contendo link de pagamento).
 - Frontend com design moderno (Material 3 e Layouts isolados: MainLayout vs SuperAdminLayout).
 - Suite de Testes E2E (Automação completa do fluxo do SuperAdmin, CRUDs e blindagem de segurança por Roles).

@@ -7,93 +7,80 @@ scheduler = AsyncIOScheduler()
 
 async def verificar_pagamentos_pendentes():
     """
-    Robô de Conciliação Ativa
-    Busca contas pendentes que atingiram a hora de 'proxima_consulta'
-    e consulta o status real no Mercado Pago.
+    Robô de Conciliação Ativa (Nova Janela de 5 Dias)
+    Busca contas pendentes cujo vencimento não excedeu 5 dias de atraso.
     """
-    print("[ROBÔ] Iniciando varredura de conciliação de pagamentos...")
+    print("[ROBÔ CONCILIAÇÃO] Iniciando varredura...")
     
     async for conn in get_db():
         try:
-            # Seleciona as contas pendentes que devem ser consultadas e que possuem preference_id (link gerado)
-            query = """
-                SELECT id, preference_id, tentativas_consulta 
+            # 1. Varredura de contas ativas na Janela Contínua (Vencimento >= Hoje - 5 dias)
+            query_ativas = """
+                SELECT id, preference_id 
                 FROM contas_receber 
                 WHERE status = 'Pendente' 
                   AND preference_id IS NOT NULL 
-                  AND tentativas_consulta < 5 
-                  AND proxima_consulta <= NOW()
+                  AND data_vencimento >= (CURRENT_DATE - INTERVAL '5 days')
             """
-            contas = await conn.fetch(query)
+            contas = await conn.fetch(query_ativas)
             
             for conta in contas:
                 conta_id = conta["id"]
-                tentativas = conta["tentativas_consulta"]
-                
-                print(f"[ROBÔ] Consultando fatura {conta_id} (Checkout Pro) - Tentativa {tentativas + 1}/5")
+                print(f"[ROBÔ CONCILIAÇÃO] Consultando fatura {conta_id} na janela de 5 dias...")
                 
                 try:
-                    # Busca os pagamentos atrelados a esta referência (conta_id)
                     pagamentos = await mp_service.buscar_pagamentos_por_referencia(str(conta_id))
-                    
                     status_interno = "Pendente"
                     mp_payment_id = None
                     
-                    # Analisa se há algum pagamento aprovado
                     for pag in pagamentos:
                         if pag.get("status") == "approved":
                             status_interno = "Pago"
                             mp_payment_id = pag.get("id")
                             break
                         elif pag.get("status") in ["rejected", "cancelled", "refunded"]:
-                            # Guarda o último status, mas continua procurando pra ver se tem um aprovado depois
                             status_interno = "Cancelado"
                             mp_payment_id = pag.get("id")
                             
                     if status_interno == "Pago":
-                        # Sucesso
                         await conn.execute(
                             "UPDATE contas_receber SET status = 'Pago', mp_payment_id = $1 WHERE id = $2::uuid", 
                             str(mp_payment_id), conta_id
                         )
-                        print(f"[ROBÔ] Fatura {conta_id} aprovada via Checkout Pro!")
+                        print(f"[ROBÔ CONCILIAÇÃO] Fatura {conta_id} aprovada!")
                         
                     elif status_interno == "Cancelado":
-                        # Cancelado/Recusado
                         await conn.execute(
                             "UPDATE contas_receber SET status = 'Cancelado', mp_payment_id = $1 WHERE id = $2::uuid", 
                             str(mp_payment_id), conta_id
                         )
-                        print(f"[ROBÔ] Fatura {conta_id} cancelada/rejeitada.")
+                        print(f"[ROBÔ CONCILIAÇÃO] Fatura {conta_id} cancelada/rejeitada.")
                         
-                    else:
-                        # Ainda pendente (nenhum pagamento aprovado/rejeitado encontrado)
-                        nova_tentativa = tentativas + 1
-                        if nova_tentativa >= 5:
-                            await conn.execute(
-                                "UPDATE contas_receber SET status = 'Atrasado', tentativas_consulta = $1 WHERE id = $2::uuid", 
-                                nova_tentativa, conta_id
-                            )
-                            print(f"[ROBÔ] Fatura {conta_id} esgotou as tentativas e foi marcada como Atrasada.")
-                        else:
-                            await conn.execute(
-                                "UPDATE contas_receber SET tentativas_consulta = $1, proxima_consulta = NOW() + INTERVAL '20 minutes' WHERE id = $2::uuid", 
-                                nova_tentativa, conta_id
-                            )
-                            print(f"[ROBÔ] Fatura {conta_id} continua pendente. Próxima consulta em 20 minutes.")
-                            
                 except Exception as e:
-                    print(f"[ROBÔ] Erro ao consultar MP para fatura {conta_id}: {e}")
-                    
+                    print(f"[ROBÔ CONCILIAÇÃO] Erro ao consultar MP para fatura {conta_id}: {e}")
+            
+            # 2. Auto-arquivamento (D+6): Contas pendentes com Vencimento < Hoje - 5 dias
+            query_atrasadas = """
+                UPDATE contas_receber 
+                SET status = 'Atrasado'
+                WHERE status = 'Pendente' 
+                  AND data_vencimento < (CURRENT_DATE - INTERVAL '5 days')
+                RETURNING id::text
+            """
+            arquivadas = await conn.fetch(query_atrasadas)
+            for arq in arquivadas:
+                print(f"[ROBÔ CONCILIAÇÃO] Fatura {arq['id']} esgotou a janela de 5 dias e foi auto-arquivada como Atrasada.")
+
         except Exception as e:
-            print(f"[ROBÔ] Erro fatal na varredura: {e}")
+            print(f"[ROBÔ CONCILIAÇÃO] Erro fatal na varredura: {e}")
         # Encerra o loop do gerador após a primeira conexão
         break
 
 def iniciar_robo():
     """
     Inicializa o scheduler e agenda a tarefa.
+    Roda de 1 em 1 hora.
     """
-    scheduler.add_job(verificar_pagamentos_pendentes, 'interval', minutes=5)
+    scheduler.add_job(verificar_pagamentos_pendentes, 'interval', hours=1)
     scheduler.start()
-    print("[ROBÔ] Robô de Conciliação de Pagamentos ativado. Varredura a cada 5 minutos.")
+    print("[ROBÔ CONCILIAÇÃO] Ativado. Varredura contínua de 1 em 1 hora.")

@@ -12,9 +12,12 @@ class FinanceiroRepository {
     }
   }
 
-  Future<Map<String, dynamic>> createConta(Map<String, dynamic> data) async {
+  Future<List<dynamic>> createConta(Map<String, dynamic> data) async {
     try {
-      final response = await _apiClient.dio.post('/core/financeiro/contas', data: data);
+      final response = await _apiClient.dio.post(
+        '/core/financeiro/contas',
+        data: data,
+      );
       return response.data;
     } catch (e) {
       throw Exception('Erro ao criar cobrança: $e');
