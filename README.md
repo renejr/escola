@@ -41,5 +41,6 @@ Sistema Multitenant de Gestão Escolar com backend em Python (FastAPI) e fronten
 - Módulo Financeiro Integrado (Geração de Carnês em Lote, rateio automático e links de Checkout Pro via Mercado Pago).
 - Motor de Conciliação Ativa Financeira (Robô Assíncrono com Janela Contínua de 5 Dias e auto-arquivamento).
 - Régua de Cobrança Automatizada (Robô de Notificações D-5 e D-0 com envio de E-mails HTML contendo link de pagamento).
+- Grid Financeiro de Alta Performance (Listagem unificada via CTE no PostgreSQL, renderização contínua de até 100 registros com bloqueio anti-cache).
 - Frontend com design moderno (Material 3 e Layouts isolados: MainLayout vs SuperAdminLayout).
 - Suite de Testes E2E (Automação completa do fluxo do SuperAdmin, CRUDs e blindagem de segurança por Roles).

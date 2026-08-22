@@ -17,11 +17,20 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
   
   bool _isLoading = false;
   List<dynamic> _contas = [];
-  List<dynamic> _alunos = [];
+  
+  // Filtros
+  String? _selectedAlunoFiltroId;
+  String _statusFilter = 'Todos';
+  DateTime? _dataInicio;
+  DateTime? _dataFim;
 
+  // Resumo
   double _totalReceber = 0;
   double _totalRecebido = 0;
   double _totalAtrasado = 0;
+  
+  // Alunos cache (para nomes na tabela)
+  final Map<String, String> _alunosCache = {};
 
   @override
   void initState() {
@@ -30,48 +39,54 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _contas = []; // Limpa para forçar o redesenho da UI
+    });
+    
     try {
-      final futures = await Future.wait([
-        _repository.getContas(),
-        _repository.getAlunos(),
-      ]);
+      final response = await _repository.getContas(
+        limit: 100,
+        alunoId: _selectedAlunoFiltroId,
+        status: _statusFilter,
+        dataInicio: _dataInicio != null ? DateFormat('yyyy-MM-dd').format(_dataInicio!) : null,
+        dataFim: _dataFim != null ? DateFormat('yyyy-MM-dd').format(_dataFim!) : null,
+      );
       
-      _contas = futures[0];
-      _alunos = futures[1];
+      setState(() {
+        _contas = response['items'];
+        
+        final resumo = response['resumo'];
+        _totalReceber = (resumo['total_receber'] ?? 0).toDouble();
+        _totalRecebido = (resumo['total_recebido'] ?? 0).toDouble();
+        _totalAtrasado = (resumo['total_atrasado'] ?? 0).toDouble();
+      });
 
-      _calculateTotals();
+      // Busca os nomes dos alunos que estão na página atual e não estão no cache
+      final alunosFaltantes = _contas
+          .map((c) => c['aluno_id'] as String?)
+          .where((id) => id != null && !_alunosCache.containsKey(id))
+          .toSet();
+      
+      if (alunosFaltantes.isNotEmpty) {
+        // Para simplificar, buscamos os alunos com limit alto para preencher o cache.
+        // Em um sistema real, poderíamos ter uma rota de GET batch por IDs.
+        final alunosBusca = await _repository.getAlunos(limit: 100);
+        for (var a in alunosBusca) {
+          _alunosCache[a['id']] = a['nome'];
+        }
+        if (mounted) {
+          setState(() {}); // Atualiza a UI após popular o cache
+        }
+      }
+      
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  void _calculateTotals() {
-    _totalReceber = 0;
-    _totalRecebido = 0;
-    _totalAtrasado = 0;
-    
-    final today = DateTime.now();
-
-    for (var conta in _contas) {
-      final valor = double.tryParse(conta['valor'].toString()) ?? 0;
-      final status = conta['status'];
-      final dtVenc = DateTime.parse(conta['data_vencimento']);
-
-      if (status == 'Pago') {
-        _totalRecebido += valor;
-      } else if (status == 'Pendente') {
-        if (dtVenc.isBefore(today) && !dtVenc.isAtSameMomentAs(DateTime(today.year, today.month, today.day))) {
-           _totalAtrasado += valor;
-        } else {
-           _totalReceber += valor;
-        }
-      } else if (status == 'Atrasado') {
-        _totalAtrasado += valor;
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -100,8 +115,7 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
 
   String _getAlunoNome(String? alunoId) {
     if (alunoId == null) return 'N/A';
-    final aluno = _alunos.firstWhere((a) => a['id'] == alunoId, orElse: () => null);
-    return aluno != null ? aluno['nome'] : 'Desconhecido';
+    return _alunosCache[alunoId] ?? 'Desconhecido';
   }
 
   Future<void> _launchUrl(String? urlString) async {
@@ -116,7 +130,19 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
     }
   }
 
-  void _showAddDialog() {
+  void _showAddDialog() async {
+    // Carrega alunos para o modal de nova cobrança
+    List<dynamic> alunosModal = [];
+    try {
+      alunosModal = await _repository.getAlunos(limit: 200); // simplificação
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar alunos: $e')));
+      return;
+    }
+
+    if (!mounted) return;
+
     final TextEditingController valorController = TextEditingController();
     final TextEditingController descontoController = TextEditingController(text: '0.00');
     final TextEditingController descricaoController = TextEditingController();
@@ -141,8 +167,8 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
                   children: [
                     DropdownButtonFormField<String>(
                       decoration: const InputDecoration(labelText: 'Aluno', border: OutlineInputBorder()),
-                      value: selectedAlunoId,
-                      items: _alunos.map((a) => DropdownMenuItem<String>(
+                      initialValue: selectedAlunoId,
+                      items: alunosModal.map((a) => DropdownMenuItem<String>(
                         value: a['id'],
                         child: Text(a['nome']),
                       )).toList(),
@@ -155,9 +181,9 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
                           child: TextField(
                             controller: valorController,
                             decoration: const InputDecoration(
-                              labelText: 'Valor Bruto (R\$)', 
+                              labelText: 'Valor Bruto Total (R\$)', 
                               border: OutlineInputBorder(),
-                              hintText: 'ex: 1000.00'
+                              hintText: 'ex: 1200.00'
                             ),
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           ),
@@ -167,7 +193,7 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
                           child: TextField(
                             controller: descontoController,
                             decoration: const InputDecoration(
-                              labelText: 'Desconto (R\$)', 
+                              labelText: 'Desconto Total (R\$)', 
                               border: OutlineInputBorder(),
                               hintText: 'ex: 50.00'
                             ),
@@ -182,7 +208,7 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
                         Expanded(
                           child: DropdownButtonFormField<int>(
                             decoration: const InputDecoration(labelText: 'Parcelas', border: OutlineInputBorder()),
-                            value: parcelas,
+                            initialValue: parcelas,
                             items: List.generate(12, (i) => i + 1).map((p) => DropdownMenuItem<int>(
                               value: p,
                               child: Text('${p}x'),
@@ -211,7 +237,7 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
                       decoration: const InputDecoration(labelText: 'Motivo', border: OutlineInputBorder()),
-                      value: selectedMotivo,
+                      initialValue: selectedMotivo,
                       items: ['Mensalidade', 'Material', 'Multa', 'Outros'].map((m) => DropdownMenuItem<String>(
                         value: m,
                         child: Text(m),
@@ -224,7 +250,7 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Descrição', 
                         border: OutlineInputBorder(),
-                        hintText: 'ex: Mensalidade Anual 2026'
+                        hintText: 'ex: Mensalidade Anual'
                       ),
                       maxLines: 2,
                     ),
@@ -286,7 +312,7 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
   Widget _buildSummaryCard(String title, double value, Color color, IconData icon) {
     return Expanded(
       child: Card(
-        color: color.withOpacity(0.1),
+        color: color.withAlpha(26),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
@@ -311,109 +337,237 @@ class _FinanceiroScreenState extends State<FinanceiroScreen> {
     );
   }
 
+  Widget _buildToolbar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Wrap(
+        spacing: 16,
+        runSpacing: 16,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          // Busca Autocomplete
+          SizedBox(
+            width: 250,
+            child: Autocomplete<Map<String, dynamic>>(
+              optionsBuilder: (TextEditingValue textEditingValue) async {
+                if (textEditingValue.text.length < 2) {
+                  return const Iterable<Map<String, dynamic>>.empty();
+                }
+                final result = await _repository.getAlunos(search: textEditingValue.text, limit: 10);
+                return result.cast<Map<String, dynamic>>();
+              },
+              displayStringForOption: (option) => option['nome'],
+              onSelected: (option) {
+                setState(() {
+                  _selectedAlunoFiltroId = option['id'];
+                  _alunosCache[option['id']] = option['nome'];
+                });
+                _loadData();
+              },
+              fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+                return TextField(
+                  controller: textEditingController,
+                  focusNode: focusNode,
+                  decoration: InputDecoration(
+                    labelText: 'Buscar Aluno...',
+                    prefixIcon: const Icon(Icons.search),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        textEditingController.clear();
+                        setState(() {
+                          _selectedAlunoFiltroId = null;
+                        });
+                        _loadData();
+                      },
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          
+          // Filtro de Data
+          OutlinedButton.icon(
+            icon: const Icon(Icons.date_range),
+            label: Text(
+              _dataInicio == null || _dataFim == null 
+              ? 'Filtrar por Data' 
+              : '${DateFormat('dd/MM/yy').format(_dataInicio!)} até ${DateFormat('dd/MM/yy').format(_dataFim!)}'
+            ),
+            onPressed: () async {
+              final range = await showDateRangePicker(
+                context: context,
+                firstDate: DateTime(2020),
+                lastDate: DateTime(2100),
+                initialDateRange: _dataInicio != null && _dataFim != null 
+                    ? DateTimeRange(start: _dataInicio!, end: _dataFim!) 
+                    : null,
+              );
+              if (range != null) {
+                setState(() {
+                  _dataInicio = range.start;
+                  _dataFim = range.end;
+                });
+                _loadData();
+              }
+            },
+          ),
+          if (_dataInicio != null)
+            IconButton(
+              icon: const Icon(Icons.clear, color: Colors.red),
+              onPressed: () {
+                setState(() {
+                  _dataInicio = null;
+                  _dataFim = null;
+                });
+                _loadData();
+              },
+            ),
+            
+          // Filtro de Status
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'Todos', label: Text('Todos')),
+              ButtonSegment(value: 'Pendente', label: Text('Pendentes')),
+              ButtonSegment(value: 'Pago', label: Text('Pagos')),
+              ButtonSegment(value: 'Atrasado', label: Text('Atrasados')),
+            ],
+            selected: {_statusFilter},
+            onSelectionChanged: (Set<String> newSelection) {
+              setState(() {
+                _statusFilter = newSelection.first;
+              });
+              _loadData();
+            },
+          ),
+          
+          const SizedBox(width: 8),
+          FilledButton.icon(
+            icon: const Icon(Icons.add),
+            label: const Text('Nova Cobrança'),
+            onPressed: _showAddDialog,
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Gestão Financeira'),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadData),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: () {
+            _loadData();
+          }),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    children: [
-                      _buildSummaryCard('A Receber', _totalReceber, Colors.blue, Icons.schedule),
-                      const SizedBox(width: 16),
-                      _buildSummaryCard('Recebido', _totalRecebido, Colors.green, Icons.check_circle),
-                      const SizedBox(width: 16),
-                      _buildSummaryCard('Inadimplência', _totalAtrasado, Colors.red, Icons.warning),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Card(
-                    margin: const EdgeInsets.all(16.0),
-                    child: _contas.isEmpty
-                      ? const Center(child: Text('Nenhuma cobrança registrada.'))
-                      : SingleChildScrollView(
-                          scrollDirection: Axis.vertical,
+                _buildSummaryCard('A Receber', _totalReceber, Colors.blue, Icons.schedule),
+                const SizedBox(width: 16),
+                _buildSummaryCard('Recebido', _totalRecebido, Colors.green, Icons.check_circle),
+                const SizedBox(width: 16),
+                _buildSummaryCard('Inadimplência', _totalAtrasado, Colors.red, Icons.warning),
+              ],
+            ),
+          ),
+          _buildToolbar(),
+          Expanded(
+            child: Card(
+              margin: const EdgeInsets.all(16.0),
+              child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _contas.isEmpty
+                  ? const Center(child: Text('Nenhuma cobrança encontrada.'))
+                  : Column(
+                      children: [
+                        Expanded(
                           child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: DataTable(
-                              columns: const [
-                                DataColumn(label: Text('Vencimento')),
-                                DataColumn(label: Text('Aluno/Responsável')),
-                                DataColumn(label: Text('Valor Líquido')),
-                                DataColumn(label: Text('Parcela')),
-                                DataColumn(label: Text('Status')),
-                                DataColumn(label: Text('Ações')),
-                              ],
-                              rows: _contas.map((c) {
-                                final status = c['status'];
-                                final dtVenc = c['data_vencimento'];
-                                final color = _getStatusColor(status, dtVenc);
-                                final dtFormatada = DateFormat('dd/MM/yyyy').format(DateTime.parse(dtVenc));
-                                final checkoutUrl = c['checkout_url'];
-                                final parcelaAtual = c['parcela_atual'] ?? 1;
-                                final totalParcelas = c['total_parcelas'] ?? 1;
-                                
-                                return DataRow(
-                                  cells: [
-                                    DataCell(Text(dtFormatada)),
-                                    DataCell(Text(_getAlunoNome(c['aluno_id']))),
-                                    DataCell(Text(_currencyFormat.format(c['valor'] ?? 0.0))),
-                                    DataCell(Text('$parcelaAtual/$totalParcelas')),
-                                    DataCell(
-                                      Chip(
-                                        label: Text(_getStatusText(status, dtVenc), style: const TextStyle(color: Colors.white, fontSize: 12)),
-                                        backgroundColor: color,
-                                        padding: EdgeInsets.zero,
+                            scrollDirection: Axis.vertical,
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: DataTable(
+                                columns: const [
+                                  DataColumn(label: Text('ID')),
+                                  DataColumn(label: Text('Vencimento')),
+                                  DataColumn(label: Text('Aluno/Responsável')),
+                                  DataColumn(label: Text('Valor Líquido')),
+                                  DataColumn(label: Text('Parcela')),
+                                  DataColumn(label: Text('Status')),
+                                  DataColumn(label: Text('Ações')),
+                                ],
+                                rows: _contas.map((c) {
+                                  final status = c['status'];
+                                  final dtVenc = c['data_vencimento'];
+                                  final color = _getStatusColor(status, dtVenc);
+                                  final dtFormatada = DateFormat('dd/MM/yyyy').format(DateTime.parse(dtVenc));
+                                  final checkoutUrl = c['checkout_url'];
+                                  final parcelaAtual = c['parcela_atual'] ?? 1;
+                                  final totalParcelas = c['total_parcelas'] ?? 1;
+                                  final idStr = c['id'] != null ? c['id'].toString().substring(0, 8) : '-';
+                                  
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(Text(idStr)),
+                                      DataCell(Text(dtFormatada)),
+                                      DataCell(Text(_getAlunoNome(c['aluno_id']))),
+                                      DataCell(Text(_currencyFormat.format(c['valor'] ?? 0.0))),
+                                      DataCell(Text('$parcelaAtual/$totalParcelas')),
+                                      DataCell(
+                                        Chip(
+                                          label: Text(_getStatusText(status, dtVenc), style: const TextStyle(color: Colors.white, fontSize: 12)),
+                                          backgroundColor: color,
+                                          padding: EdgeInsets.zero,
+                                        ),
                                       ),
-                                    ),
-                                    DataCell(
-                                      checkoutUrl != null 
-                                      ? Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            IconButton(
-                                              icon: const Icon(Icons.link, color: Colors.blue),
-                                              tooltip: 'Abrir Link de Pagamento',
-                                              onPressed: () => _launchUrl(checkoutUrl),
-                                            ),
-                                            IconButton(
-                                              icon: const Icon(Icons.copy, color: Colors.grey),
-                                              tooltip: 'Copiar Link',
-                                              onPressed: () {
-                                                Clipboard.setData(ClipboardData(text: checkoutUrl));
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  const SnackBar(content: Text('Link copiado!')),
-                                                );
-                                              },
-                                            ),
-                                          ],
-                                        )
-                                      : const Text('-'),
-                                    ),
-                                  ],
-                                );
-                              }).toList(),
+                                      DataCell(
+                                        checkoutUrl != null 
+                                        ? Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              IconButton(
+                                                icon: const Icon(Icons.link, color: Colors.blue),
+                                                tooltip: 'Abrir Link de Pagamento',
+                                                onPressed: () => _launchUrl(checkoutUrl),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(Icons.copy, color: Colors.grey),
+                                                tooltip: 'Copiar Link',
+                                                onPressed: () {
+                                                  Clipboard.setData(ClipboardData(text: checkoutUrl));
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    const SnackBar(content: Text('Link copiado!')),
+                                                  );
+                                                },
+                                              ),
+                                            ],
+                                          )
+                                        : const Text('-'),
+                                      ),
+                                    ],
+                                  );
+                                }).toList(),
+                              ),
                             ),
                           ),
                         ),
-                  ),
-                ),
-              ],
+                      ],
+                    ),
             ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddDialog,
-        icon: const Icon(Icons.add),
-        label: const Text('Nova Cobrança'),
+          ),
+        ],
       ),
     );
   }

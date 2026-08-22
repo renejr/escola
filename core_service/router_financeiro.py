@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import date
@@ -35,25 +35,89 @@ class ContaReceberResponse(BaseModel):
     checkout_url: Optional[str] = None
     preference_id: Optional[str] = None
 
-@router.get("/contas", response_model=List[ContaReceberResponse])
+class FinanceiroResumoResponse(BaseModel):
+    total_receber: float
+    total_recebido: float
+    total_atrasado: float
+
+class ContaReceberPaginatedResponse(BaseModel):
+    items: List[ContaReceberResponse]
+    total: int
+    resumo: FinanceiroResumoResponse
+
+@router.get("/contas", response_model=ContaReceberPaginatedResponse)
 async def list_contas(
+    limit: int = Query(100, ge=1, le=100),
+    aluno_id: Optional[str] = None,
+    status: Optional[str] = None,
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
     user: dict = Depends(require_role(['admin', 'diretor', 'secretario'])),
     conn: Connection = Depends(get_db)
 ):
     escola_id = user.get("escola_id")
-    records = await conn.fetch(
-        """
-        SELECT id::text, aluno_id::text, responsavel_id::text, 
-               valor_bruto, desconto, valor, data_vencimento, 
-               status, motivo, descricao, parcela_atual, total_parcelas,
-               checkout_url, preference_id
+    
+    conditions = ["escola_id = $1::uuid"]
+    params = [escola_id]
+    
+    if aluno_id:
+        params.append(aluno_id)
+        conditions.append(f"aluno_id = ${len(params)}::uuid")
+        
+    if status and status != 'Todos':
+        params.append(status.upper() if status.upper() == 'PAGO' else status.capitalize())
+        conditions.append(f"status = ${len(params)}")
+        
+    if data_inicio:
+        params.append(data_inicio)
+        conditions.append(f"data_vencimento >= ${len(params)}")
+        
+    if data_fim:
+        params.append(data_fim)
+        conditions.append(f"data_vencimento <= ${len(params)}")
+        
+    where_clause = " AND ".join(conditions)
+    
+    params.append(limit)
+    limit_idx = len(params)
+    
+    # A Bomba Nuclear (CTE) forçando a materialização prévia (Sem OFFSET)
+    nuclear_query = f"""
+        WITH BaseContas AS (
+            SELECT id::text, aluno_id::text, responsavel_id::text, valor_bruto, desconto, valor, 
+                   data_vencimento, status, motivo, descricao, parcela_atual, total_parcelas, 
+                   checkout_url, preference_id, 
+                   COUNT(*) OVER() as total_rows
+            FROM contas_receber
+            WHERE {where_clause}
+        )
+        SELECT * FROM BaseContas
+        ORDER BY data_vencimento ASC, id ASC
+        LIMIT ${limit_idx}::int;
+    """
+    
+    records = await conn.fetch(nuclear_query, *params)
+    items = [dict(r) for r in records]
+    
+    total_records = records[0]['total_rows'] if records else 0
+    
+    resumo_query = f"""
+        SELECT 
+            COALESCE(SUM(CASE WHEN status = 'Pendente' AND data_vencimento >= CURRENT_DATE THEN valor ELSE 0 END), 0) as total_receber,
+            COALESCE(SUM(CASE WHEN status = 'Pago' THEN valor ELSE 0 END), 0) as total_recebido,
+            COALESCE(SUM(CASE WHEN status = 'Atrasado' OR (status = 'Pendente' AND data_vencimento < CURRENT_DATE) THEN valor ELSE 0 END), 0) as total_atrasado
         FROM contas_receber
-        WHERE escola_id = $1::uuid
-        ORDER BY data_vencimento DESC
-        """,
-        escola_id
-    )
-    return [dict(r) for r in records]
+        WHERE {where_clause}
+    """
+    resumo_record = await conn.fetchrow(resumo_query, *params[:-1])
+    
+    resumo = {
+        "total_receber": float(resumo_record["total_receber"]),
+        "total_recebido": float(resumo_record["total_recebido"]),
+        "total_atrasado": float(resumo_record["total_atrasado"]),
+    }
+    
+    return {"items": items, "total": total_records, "resumo": resumo}
 
 @router.post("/contas", response_model=List[ContaReceberResponse])
 async def create_conta_lote(

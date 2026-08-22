@@ -81,6 +81,8 @@ async def criar_aluno(
 @router.get("")
 async def listar_alunos(
     turma_id: Optional[str] = None,
+    search: Optional[str] = None,
+    limit: Optional[int] = None,
     tenant: dict = Depends(require_role(['admin', 'diretor', 'secretario', 'professor'])),
     conn: asyncpg.Connection = Depends(get_db)
 ):
@@ -108,15 +110,30 @@ async def listar_alunos(
             ) as responsaveis_json
         FROM alunos a 
         LEFT JOIN turmas t ON a.turma_id = t.id 
-        WHERE a.escola_id = $1::uuid
     """
     
+    conditions = ["a.escola_id = $1::uuid"]
+    params = [escola_id]
+    param_idx = 2
+    
     if turma_id:
-        query = base_query + " AND a.turma_id = $2::uuid ORDER BY a.nome"
-        rows = await conn.fetch(query, escola_id, turma_id)
-    else:
-        query = base_query + " ORDER BY a.nome"
-        rows = await conn.fetch(query, escola_id)
+        conditions.append(f"a.turma_id = ${param_idx}::uuid")
+        params.append(turma_id)
+        param_idx += 1
+        
+    if search:
+        conditions.append(f"(a.nome ILIKE ${param_idx} OR a.matricula_ra ILIKE ${param_idx})")
+        params.append(f"%{search}%")
+        param_idx += 1
+        
+    where_clause = " WHERE " + " AND ".join(conditions)
+    query = base_query + where_clause + " ORDER BY a.nome"
+    
+    if limit:
+        query += f" LIMIT ${param_idx}"
+        params.append(limit)
+        
+    rows = await conn.fetch(query, *params)
         
     result = []
     for row in rows:
